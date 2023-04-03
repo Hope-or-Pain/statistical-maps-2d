@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" SameSite=None>
+    <title>Solar PV data visualization</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css"
+        integrity="sha512-hoalWLoI8r4UszCkZ5kL8vayOGVae1oxXe/2A4AO6J9+580uKHDO3JdHb7NzwwzK5xr/Fs0W40kiNHxM9vyTtQ=="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"
+        integrity="sha512-BB3hKbKWOc9Ez/TAwyWxNXeoV9c1v6FIeYiBieIWkpLjauysF18NzgR1MBNBXf8/KABdlkX68nAhlwcDFLGPCQ=="
+        crossorigin=""></script>
+    <!-- 引入echart图表插件 -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+    <!-- 引入turf空间计算插件 -->
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+
+    <style>
+        #map {
+            height: 1500px;
+            width: 1500px;
+        }
+        .my-div-icon .iconTxt{
+            width: 400px;
+            position: relative;
+            left: -185px;
+            text-align: center;
+            font-size:16px;
+            font-weight: 600;
+            color:darkblue;
+            text-shadow: #fff 2px 0 0, #fff 0 2px 0, #fff -2px 0 0, #fff 0 -2px 0;
+        }
+
+    </style>
+</head>
+
+<body>
+    <h1>Solar PV</h1>
+    <div id="map"></div>
+</body>
+<!-- 数据处理 -->
+<script>
+    // 原始分区数据，通过QGis右键数据--Export-Save Features As--Format:GeoJSON
+    let ori_geo_bne = {
+        "type": "FeatureCollection",
+        "name": "bne",
+        "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+        "features": [
+            { "type": "Feature", "properties": { "fid": 1, "full_id": "n80869177", "osm_id": "80869177", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Wynnum" }, "geometry": { "type": "Point", "coordinates": [153.1756078, -27.4451042] } },
+            { "type": "Feature", "properties": { "fid": 2, "full_id": "n106419681", "osm_id": "106419681", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Murarrie" }, "geometry": { "type": "Point", "coordinates": [153.105018, -27.4609442] } },
+            { "type": "Feature", "properties": { "fid": 3, "full_id": "n106419711", "osm_id": "106419711", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Tingalpa" }, "geometry": { "type": "Point", "coordinates": [153.128301599999986, -27.4759575] } },
+            { "type": "Feature", "properties": { "fid": 4, "full_id": "n106419725", "osm_id": "106419725", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": "Q5712320", "name": "Hemmant" }, "geometry": { "type": "Point", "coordinates": [153.130520499999989, -27.4505703] } },
+            { "type": "Feature", "properties": { "fid": 5, "full_id": "n130155432", "osm_id": "130155432", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": "Q8040236", "name": "Wynnum West" }, "geometry": { "type": "Point", "coordinates": [153.1562022, -27.4539766] } },
+            { "type": "Feature", "properties": { "fid": 6, "full_id": "n130155442", "osm_id": "130155442", "osm_type": "node", "place": "suburb", "wikipedia": "en:Wakerley, Queensland", "wikidata": "Q7961127", "name": "Wakerley" }, "geometry": { "type": "Point", "coordinates": [153.1617698, -27.4819726] } },
+            { "type": "Feature", "properties": { "fid": 7, "full_id": "n130155450", "osm_id": "130155450", "osm_type": "node", "place": "suburb", "wikipedia": "en:Ransome, Queensland", "wikidata": "Q7293497", "name": "Ransome" }, "geometry": { "type": "Point", "coordinates": [153.181367099999989, -27.4856896] } },
+            { "type": "Feature", "properties": { "fid": 8, "full_id": "n304236979", "osm_id": "304236979", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Manly" }, "geometry": { "type": "Point", "coordinates": [153.184910800000011, -27.4547329] } },
+            { "type": "Feature", "properties": { "fid": 9, "full_id": "n304237355", "osm_id": "304237355", "osm_type": "node", "place": "suburb", "wikipedia": "en:Manly West, Queensland", "wikidata": "Q6750623", "name": "Manly West" }, "geometry": { "type": "Point", "coordinates": [153.1692817, -27.4619537] } },
+            { "type": "Feature", "properties": { "fid": 10, "full_id": "n4235362372", "osm_id": "4235362372", "osm_type": "node", "place": "suburb", "wikipedia": "en:Lota, Queensland", "wikidata": "Q6684604", "name": "Lota" }, "geometry": { "type": "Point", "coordinates": [153.1883924, -27.4679039] } }
+        ]
+    };
+    // 合并后分区数据
+    let geo_bne = {
+        "type": "FeatureCollection",
+        "name": "bne",
+        "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+        "features": [
+            { "type": "Feature", "properties": { "fid": 1, "full_id": "n80869177", "osm_id": "80869177", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Wynnum" }, "geometry": { "type": "Point", "coordinates": [153.1756078, -27.4451042] } },
+            { "type": "Feature", "properties": { "fid": 2, "full_id": "n106419681", "osm_id": "106419681", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Murarrie" }, "geometry": { "type": "Point", "coordinates": [153.105018, -27.4609442] } },
+            { "type": "Feature", "properties": { "fid": 3, "full_id": "n106419711", "osm_id": "106419711", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Tingalpa" }, "geometry": { "type": "Point", "coordinates": [153.128301599999986, -27.4759575] } },
+            { "type": "Feature", "properties": { "fid": 4, "full_id": "n106419725", "osm_id": "106419725", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": "Q5712320", "name": "Hemmant_WynnumWest" }, "geometry": { "type": "Point", "coordinates": [153.14336135, -27.45227345] } },
+            { "type": "Feature", "properties": { "fid": 6, "full_id": "n130155442", "osm_id": "130155442", "osm_type": "node", "place": "suburb", "wikipedia": "en:Wakerley, Queensland", "wikidata": "Q7961127", "name": "Wakerley" }, "geometry": { "type": "Point", "coordinates": [153.1617698, -27.4819726] } },
+            { "type": "Feature", "properties": { "fid": 7, "full_id": "n130155450", "osm_id": "130155450", "osm_type": "node", "place": "suburb", "wikipedia": "en:Ransome, Queensland", "wikidata": "Q7293497", "name": "Belmont_Gumdale" }, "geometry": { "type": "Point", "coordinates": [153.127, -27.4896] } },
+            { "type": "Feature", "properties": { "fid": 8, "full_id": "n304236979", "osm_id": "304236979", "osm_type": "node", "place": "suburb", "wikipedia": null, "wikidata": null, "name": "Manly_Lota" }, "geometry": { "type": "Point", "coordinates": [153.1866516, -27.4613184] } },
+            { "type": "Feature", "properties": { "fid": 9, "full_id": "n304237355", "osm_id": "304237355", "osm_type": "node", "place": "suburb", "wikipedia": "en:Manly West, Queensland", "wikidata": "Q6750623", "name": "ManlyWest" }, "geometry": { "type": "Point", "coordinates": [153.1692817, -27.4619537] } }
+        ]
+    };
+    // 结果数据
+    let output_bne = [
+        { "Area": "Belmont_Gumdale", "o2013-2015": "0.40972", "o2015-2017": "0.09113", "o2017-2019": "0.33634", "o2019-2021": "0.20272", "o2013-2021": "1.4722" },
+        { "Area": "Hemmant_WynnumWest", "o2013-2015": "0.4715", "o2015-2017": "0.1005", "o2017-2019": "0.2118", "o2019-2021": "0.2062", "o2013-2021": "1.3674" },
+        { "Area": "Manly_Lota", "o2013-2015": "0.4305", "o2015-2017": "0.1295", "o2017-2019": "0.3142", "o2019-2021": "0.2054", "o2013-2021": "1.5598" },
+        { "Area": "ManlyWest", "o2013-2015": "0.3438", "o2015-2017": "0.14", "o2017-2019": "0.2256", "o2019-2021": "0.1851", "o2013-2021": "1.2254" },
+        { "Area": "Murarrie", "o2013-2015": "0.5972", "o2015-2017": "0.1391", "o2017-2019": "0.229", "o2019-2021": "0.2173", "o2013-2021": "1.7222" },
+        { "Area": "Tingalpa", "o2013-2015": "0.4625", "o2015-2017": "0.1668", "o2017-2019": "0.1807", "o2019-2021": "0.2102", "o2013-2021": "1.4386" },
+        { "Area": "Wakerley", "o2013-2015": "0.4264", "o2015-2017": "0.1271", "o2017-2019": "0.25", "o2019-2021": "0.3536", "o2013-2021": "1.7205" },
+        { "Area": "Wynnum", "o2013-2015": "0.4427", "o2015-2017": "0.1322", "o2017-2019": "0.2802", "o2019-2021": "0.2377", "o2013-2021": "1.5884" },
+        // { "Area": "Average", "o2013-2015": "0.44804", "o2015-2017": "0.12829125", "o2017-2019": "0.25348", "o2019-2021": "0.2272775", "o2013-2021": "1.5118125" }
+    ];
+    // // // ↓↓↓areas_detail_bne数据处理过程↓↓↓
+    // // // 获得区域唯一值
+    // let areas_bne = output_bne.filter(anf => anf.Area != 'Average').map(fm => fm.Area);
+    // //将【区域详细数据.csv】转json http://www.esjson.com/exceltojson.html 得到如下结果
+    // let detail_bne = [
+    //     { "year": "2013", "population": "15327", "population_change_with_lastyr": "212", "density_per/km2": "1252.9", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Hemmant_WynnumWest", "dwellings": "5783.773585", "quantity": "1230" },
+    //     { "year": "2015", "population": "15439", "population_change_with_lastyr": "-27", "density_per/km2": "1262.1", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Hemmant_WynnumWest", "dwellings": "5826.037736", "quantity": "1810" },
+    //     { "year": "2017", "population": "15410", "population_change_with_lastyr": "144", "density_per/km2": "1255.5", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Hemmant_WynnumWest", "dwellings": "5815.09434", "quantity": "1992" },
+    //     { "year": "2019", "population": "15738", "population_change_with_lastyr": "127", "density_per/km2": "1282.2", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Hemmant_WynnumWest", "dwellings": "5938.867925", "quantity": "2414" },
+    //     { "year": "2021", "population": "15988", "population_change_with_lastyr": "132", "density_per/km2": "1302.6", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Hemmant_WynnumWest", "dwellings": "6033.207547", "quantity": "2912" },
+    //     { "year": "2013", "population": "7690", "population_change_with_lastyr": "81", "density_per/km2": "1940.9", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Manly_Lota", "dwellings": "2901.886792", "quantity": "518" },
+    //     { "year": "2015", "population": "7783", "population_change_with_lastyr": "81", "density_per/km2": "1964.4", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Manly_Lota", "dwellings": "2936.981132", "quantity": "741" },
+    //     { "year": "2017", "population": "7804", "population_change_with_lastyr": "75", "density_per/km2": "1858.6", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Manly_Lota", "dwellings": "2944.90566", "quantity": "837" },
+    //     { "year": "2019", "population": "7851", "population_change_with_lastyr": "60", "density_per/km2": "1869.8", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Manly_Lota", "dwellings": "2962.641509", "quantity": "1100" },
+    //     { "year": "2021", "population": "7927", "population_change_with_lastyr": "-52", "density_per/km2": "1887.9", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Manly_Lota", "dwellings": "2991.320755", "quantity": "1326" },
+    //     { "year": "2013", "population": "11399", "population_change_with_lastyr": "148", "density_per/km2": "2298", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "ManlyWest", "dwellings": "4301.509434", "quantity": "1047" },
+    //     { "year": "2015", "population": "11768", "population_change_with_lastyr": "83", "density_per/km2": "2372.3", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "ManlyWest", "dwellings": "4440.754717", "quantity": "1407" },
+    //     { "year": "2017", "population": "11898", "population_change_with_lastyr": "143", "density_per/km2": "2425.4", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "ManlyWest", "dwellings": "4489.811321", "quantity": "1604" },
+    //     { "year": "2019", "population": "12145", "population_change_with_lastyr": "8", "density_per/km2": "2475.8", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "ManlyWest", "dwellings": "4583.018868", "quantity": "1966" },
+    //     { "year": "2021", "population": "12274", "population_change_with_lastyr": "56", "density_per/km2": "2502.1", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "ManlyWest", "dwellings": "4631.698113", "quantity": "2330" },
+    //     { "year": "2013", "population": "4328", "population_change_with_lastyr": "52", "density_per/km2": "522.2", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Murarrie", "dwellings": "1633.207547", "quantity": "72" },
+    //     { "year": "2015", "population": "4458", "population_change_with_lastyr": "24", "density_per/km2": "537.9", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Murarrie", "dwellings": "1682.264151", "quantity": "115" },
+    //     { "year": "2017", "population": "4389", "population_change_with_lastyr": "68", "density_per/km2": "520.1", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Murarrie", "dwellings": "1656.226415", "quantity": "131" },
+    //     { "year": "2019", "population": "4592", "population_change_with_lastyr": "141", "density_per/km2": "544.1", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Murarrie", "dwellings": "1732.830189", "quantity": "161" },
+    //     { "year": "2021", "population": "4844", "population_change_with_lastyr": "66", "density_per/km2": "574", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Murarrie", "dwellings": "1827.924528", "quantity": "196" },
+    //     { "year": "2013", "population": "8926", "population_change_with_lastyr": "79", "density_per/km2": "999.5", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Tingalpa", "dwellings": "3368.301887", "quantity": "668" },
+    //     { "year": "2015", "population": "8807", "population_change_with_lastyr": "-9", "density_per/km2": "986.2", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Tingalpa", "dwellings": "3323.396226", "quantity": "977" },
+    //     { "year": "2017", "population": "9035", "population_change_with_lastyr": "31", "density_per/km2": "1012.2", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Tingalpa", "dwellings": "3409.433962", "quantity": "1140" },
+    //     { "year": "2019", "population": "9305", "population_change_with_lastyr": "82", "density_per/km2": "1042.4", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Tingalpa", "dwellings": "3511.320755", "quantity": "1346" },
+    //     { "year": "2021", "population": "9299", "population_change_with_lastyr": "-63", "density_per/km2": "1041.8", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Tingalpa", "dwellings": "3509.056604", "quantity": "1629" },
+    //     { "year": "2013", "population": "8886", "population_change_with_lastyr": "549", "density_per/km2": "1805.7", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Wakerley", "dwellings": "3353.207547", "quantity": "204" },
+    //     { "year": "2015", "population": "9569", "population_change_with_lastyr": "183", "density_per/km2": "1944.5", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Wakerley", "dwellings": "3610.943396", "quantity": "291" },
+    //     { "year": "2017", "population": "9347", "population_change_with_lastyr": "76", "density_per/km2": "1798.8", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Wakerley", "dwellings": "3527.169811", "quantity": "328" },
+    //     { "year": "2019", "population": "9794", "population_change_with_lastyr": "218", "density_per/km2": "1884.8", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Wakerley", "dwellings": "3695.849057", "quantity": "410" },
+    //     { "year": "2021", "population": "9937", "population_change_with_lastyr": "-36", "density_per/km2": "1912.4", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Wakerley", "dwellings": "3749.811321", "quantity": "555" },
+    //     { "year": "2013", "population": "13469", "population_change_with_lastyr": "217", "density_per/km2": "2195.6", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Wynnum", "dwellings": "5082.641509", "quantity": "865" },
+    //     { "year": "2015", "population": "13652", "population_change_with_lastyr": "104", "density_per/km2": "2225.4", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Wynnum", "dwellings": "5151.698113", "quantity": "1248" },
+    //     { "year": "2017", "population": "13914", "population_change_with_lastyr": "223", "density_per/km2": "2268.9", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Wynnum", "dwellings": "5250.566038", "quantity": "1413" },
+    //     { "year": "2019", "population": "14466", "population_change_with_lastyr": "325", "density_per/km2": "2358.9", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Wynnum", "dwellings": "5458.867925", "quantity": "1809" },
+    //     { "year": "2021", "population": "14878", "population_change_with_lastyr": "178", "density_per/km2": "2426.1", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Wynnum", "dwellings": "5614.339623", "quantity": "2239" },
+    //     { "year": "2013", "population": "7893", "population_change_with_lastyr": "99", "density_per/km2": "238.1", "daylight_hours": "12.29", "income_per/week": "2206", "energy_cost_c/kwh": "28", "solar_pv_cost": "3902", "housing_construction": "18923", "suburbs": "Belmont_Gumdale", "dwellings": "2978.490566", "quantity": "288" },
+    //     { "year": "2015", "population": "8000", "population_change_with_lastyr": "82", "density_per/km2": "241.3", "daylight_hours": "12.34", "income_per/week": "2187", "energy_cost_c/kwh": "26", "solar_pv_cost": "3287", "housing_construction": "23166", "suburbs": "Belmont_Gumdale", "dwellings": "3018.867925", "quantity": "406" },
+    //     { "year": "2017", "population": "7730", "population_change_with_lastyr": "17", "density_per/km2": "233.5", "daylight_hours": "12.29", "income_per/week": "2242", "energy_cost_c/kwh": "28", "solar_pv_cost": "3052", "housing_construction": "24678", "suburbs": "Belmont_Gumdale", "dwellings": "2916.981132", "quantity": "443" },
+    //     { "year": "2019", "population": "7943", "population_change_with_lastyr": "89", "density_per/km2": "239.9", "daylight_hours": "12.34", "income_per/week": "2340", "energy_cost_c/kwh": "30", "solar_pv_cost": "3030", "housing_construction": "21564", "suburbs": "Belmont_Gumdale", "dwellings": "2997.358491", "quantity": "592" },
+    //     { "year": "2021", "population": "7934", "population_change_with_lastyr": "33", "density_per/km2": "239.6", "daylight_hours": "12.29", "income_per/week": "2230", "energy_cost_c/kwh": "28", "solar_pv_cost": "3990", "housing_construction": "28536", "suburbs": "Belmont_Gumdale", "dwellings": "2993.962264", "quantity": "712" }
+    // ]
+    // // 将分区信息与全量信息匹配
+    // let areas_detail_bne = areas_bne.map(abm => {
+    //     return {
+    //         name: abm,
+    //         years: detail_bne.filter(dbf => dbf.suburbs == abm)
+    //     }
+    // })
+    // // //↑↑↑areas_detail_bne数据处理过程↑↑↑
+    // 分区历年数据
+    let areas_detail_bne = [
+        {
+            "name": "Belmont_Gumdale",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "7893",
+                    "population_change_with_lastyr": "99",
+                    "density_per/km2": "238.1",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Belmont_Gumdale",
+                    "dwellings": "2978.490566",
+                    "quantity": "288"
+                },
+                {
+                    "year": "2015",
+                    "population": "8000",
+                    "population_change_with_lastyr": "82",
+                    "density_per/km2": "241.3",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Belmont_Gumdale",
+                    "dwellings": "3018.867925",
+                    "quantity": "406"
+                },
+                {
+                    "year": "2017",
+                    "population": "7730",
+                    "population_change_with_lastyr": "17",
+                    "density_per/km2": "233.5",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Belmont_Gumdale",
+                    "dwellings": "2916.981132",
+                    "quantity": "443"
+                },
+                {
+                    "year": "2019",
+                    "population": "7943",
+                    "population_change_with_lastyr": "89",
+                    "density_per/km2": "239.9",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Belmont_Gumdale",
+                    "dwellings": "2997.358491",
+                    "quantity": "592"
+                },
+                {
+                    "year": "2021",
+                    "population": "7934",
+                    "population_change_with_lastyr": "33",
+                    "density_per/km2": "239.6",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Belmont_Gumdale",
+                    "dwellings": "2993.962264",
+                    "quantity": "712"
+                }
+            ]
+        },
+        {
+            "name": "Hemmant_WynnumWest",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "15327",
+                    "population_change_with_lastyr": "212",
+                    "density_per/km2": "1252.9",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Hemmant_WynnumWest",
+                    "dwellings": "5783.773585",
+                    "quantity": "1230"
+                },
+                {
+                    "year": "2015",
+                    "population": "15439",
+                    "population_change_with_lastyr": "-27",
+                    "density_per/km2": "1262.1",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Hemmant_WynnumWest",
+                    "dwellings": "5826.037736",
+                    "quantity": "1810"
+                },
+                {
+                    "year": "2017",
+                    "population": "15410",
+                    "population_change_with_lastyr": "144",
+                    "density_per/km2": "1255.5",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Hemmant_WynnumWest",
+                    "dwellings": "5815.09434",
+                    "quantity": "1992"
+                },
+                {
+                    "year": "2019",
+                    "population": "15738",
+                    "population_change_with_lastyr": "127",
+                    "density_per/km2": "1282.2",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Hemmant_WynnumWest",
+                    "dwellings": "5938.867925",
+                    "quantity": "2414"
+                },
+                {
+                    "year": "2021",
+                    "population": "15988",
+                    "population_change_with_lastyr": "132",
+                    "density_per/km2": "1302.6",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Hemmant_WynnumWest",
+                    "dwellings": "6033.207547",
+                    "quantity": "2912"
+                }
+            ]
+        },
+        {
+            "name": "Manly_Lota",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "7690",
+                    "population_change_with_lastyr": "81",
+                    "density_per/km2": "1940.9",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Manly_Lota",
+                    "dwellings": "2901.886792",
+                    "quantity": "518"
+                },
+                {
+                    "year": "2015",
+                    "population": "7783",
+                    "population_change_with_lastyr": "81",
+                    "density_per/km2": "1964.4",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Manly_Lota",
+                    "dwellings": "2936.981132",
+                    "quantity": "741"
+                },
+                {
+                    "year": "2017",
+                    "population": "7804",
+                    "population_change_with_lastyr": "75",
+                    "density_per/km2": "1858.6",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Manly_Lota",
+                    "dwellings": "2944.90566",
+                    "quantity": "837"
+                },
+                {
+                    "year": "2019",
+                    "population": "7851",
+                    "population_change_with_lastyr": "60",
+                    "density_per/km2": "1869.8",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Manly_Lota",
+                    "dwellings": "2962.641509",
+                    "quantity": "1100"
+                },
+                {
+                    "year": "2021",
+                    "population": "7927",
+                    "population_change_with_lastyr": "-52",
+                    "density_per/km2": "1887.9",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Manly_Lota",
+                    "dwellings": "2991.320755",
+                    "quantity": "1326"
+                }
+            ]
+        },
+        {
+            "name": "ManlyWest",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "11399",
+                    "population_change_with_lastyr": "148",
+                    "density_per/km2": "2298",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "ManlyWest",
+                    "dwellings": "4301.509434",
+                    "quantity": "1047"
+                },
+                {
+                    "year": "2015",
+                    "population": "11768",
+                    "population_change_with_lastyr": "83",
+                    "density_per/km2": "2372.3",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "ManlyWest",
+                    "dwellings": "4440.754717",
+                    "quantity": "1407"
+                },
+                {
+                    "year": "2017",
+                    "population": "11898",
+                    "population_change_with_lastyr": "143",
+                    "density_per/km2": "2425.4",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "ManlyWest",
+                    "dwellings": "4489.811321",
+                    "quantity": "1604"
+                },
+                {
+                    "year": "2019",
+                    "population": "12145",
+                    "population_change_with_lastyr": "8",
+                    "density_per/km2": "2475.8",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "ManlyWest",
+                    "dwellings": "4583.018868",
+                    "quantity": "1966"
+                },
+                {
+                    "year": "2021",
+                    "population": "12274",
+                    "population_change_with_lastyr": "56",
+                    "density_per/km2": "2502.1",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "ManlyWest",
+                    "dwellings": "4631.698113",
+                    "quantity": "2330"
+                }
+            ]
+        },
+        {
+            "name": "Murarrie",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "4328",
+                    "population_change_with_lastyr": "52",
+                    "density_per/km2": "522.2",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Murarrie",
+                    "dwellings": "1633.207547",
+                    "quantity": "72"
+                },
+                {
+                    "year": "2015",
+                    "population": "4458",
+                    "population_change_with_lastyr": "24",
+                    "density_per/km2": "537.9",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Murarrie",
+                    "dwellings": "1682.264151",
+                    "quantity": "115"
+                },
+                {
+                    "year": "2017",
+                    "population": "4389",
+                    "population_change_with_lastyr": "68",
+                    "density_per/km2": "520.1",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Murarrie",
+                    "dwellings": "1656.226415",
+                    "quantity": "131"
+                },
+                {
+                    "year": "2019",
+                    "population": "4592",
+                    "population_change_with_lastyr": "141",
+                    "density_per/km2": "544.1",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Murarrie",
+                    "dwellings": "1732.830189",
+                    "quantity": "161"
+                },
+                {
+                    "year": "2021",
+                    "population": "4844",
+                    "population_change_with_lastyr": "66",
+                    "density_per/km2": "574",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Murarrie",
+                    "dwellings": "1827.924528",
+                    "quantity": "196"
+                }
+            ]
+        },
+        {
+            "name": "Tingalpa",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "8926",
+                    "population_change_with_lastyr": "79",
+                    "density_per/km2": "999.5",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Tingalpa",
+                    "dwellings": "3368.301887",
+                    "quantity": "668"
+                },
+                {
+                    "year": "2015",
+                    "population": "8807",
+                    "population_change_with_lastyr": "-9",
+                    "density_per/km2": "986.2",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Tingalpa",
+                    "dwellings": "3323.396226",
+                    "quantity": "977"
+                },
+                {
+                    "year": "2017",
+                    "population": "9035",
+                    "population_change_with_lastyr": "31",
+                    "density_per/km2": "1012.2",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Tingalpa",
+                    "dwellings": "3409.433962",
+                    "quantity": "1140"
+                },
+                {
+                    "year": "2019",
+                    "population": "9305",
+                    "population_change_with_lastyr": "82",
+                    "density_per/km2": "1042.4",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Tingalpa",
+                    "dwellings": "3511.320755",
+                    "quantity": "1346"
+                },
+                {
+                    "year": "2021",
+                    "population": "9299",
+                    "population_change_with_lastyr": "-63",
+                    "density_per/km2": "1041.8",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Tingalpa",
+                    "dwellings": "3509.056604",
+                    "quantity": "1629"
+                }
+            ]
+        },
+        {
+            "name": "Wakerley",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "8886",
+                    "population_change_with_lastyr": "549",
+                    "density_per/km2": "1805.7",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Wakerley",
+                    "dwellings": "3353.207547",
+                    "quantity": "204"
+                },
+                {
+                    "year": "2015",
+                    "population": "9569",
+                    "population_change_with_lastyr": "183",
+                    "density_per/km2": "1944.5",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Wakerley",
+                    "dwellings": "3610.943396",
+                    "quantity": "291"
+                },
+                {
+                    "year": "2017",
+                    "population": "9347",
+                    "population_change_with_lastyr": "76",
+                    "density_per/km2": "1798.8",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Wakerley",
+                    "dwellings": "3527.169811",
+                    "quantity": "328"
+                },
+                {
+                    "year": "2019",
+                    "population": "9794",
+                    "population_change_with_lastyr": "218",
+                    "density_per/km2": "1884.8",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Wakerley",
+                    "dwellings": "3695.849057",
+                    "quantity": "410"
+                },
+                {
+                    "year": "2021",
+                    "population": "9937",
+                    "population_change_with_lastyr": "-36",
+                    "density_per/km2": "1912.4",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Wakerley",
+                    "dwellings": "3749.811321",
+                    "quantity": "555"
+                }
+            ]
+        },
+        {
+            "name": "Wynnum",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "13469",
+                    "population_change_with_lastyr": "217",
+                    "density_per/km2": "2195.6",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "Wynnum",
+                    "dwellings": "5082.641509",
+                    "quantity": "865"
+                },
+                {
+                    "year": "2015",
+                    "population": "13652",
+                    "population_change_with_lastyr": "104",
+                    "density_per/km2": "2225.4",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "Wynnum",
+                    "dwellings": "5151.698113",
+                    "quantity": "1248"
+                },
+                {
+                    "year": "2017",
+                    "population": "13914",
+                    "population_change_with_lastyr": "223",
+                    "density_per/km2": "2268.9",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "Wynnum",
+                    "dwellings": "5250.566038",
+                    "quantity": "1413"
+                },
+                {
+                    "year": "2019",
+                    "population": "14466",
+                    "population_change_with_lastyr": "325",
+                    "density_per/km2": "2358.9",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "Wynnum",
+                    "dwellings": "5458.867925",
+                    "quantity": "1809"
+                },
+                {
+                    "year": "2021",
+                    "population": "14878",
+                    "population_change_with_lastyr": "178",
+                    "density_per/km2": "2426.1",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "Wynnum",
+                    "dwellings": "5614.339623",
+                    "quantity": "2239"
+                }
+            ]
+        }
+    ]
+    // // GC同理
+    // // GC原始数据
+    // let ori_geo_gc = {
+    //     "type": "FeatureCollection",
+    //     "name": "GC",
+    //     "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+    //     "features": [
+    //         { "type": "Feature", "properties": { "fid": 1, "full_id": "n21381163", "osm_id": "21381163", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": "http://www.censusdata.abs.gov.au/census_services/getproduct/census/2011/quickstat/", "population": "5192", "name": "Coolangatta", "is_in_1": "GoldCoast", "is_in:state_code": "QLD", "is_in:state": "Queensland", "is_in:country_code": "AU", "is_in:country": "Australia", "is_in": "Australia,QLD,Queensland,resorttowns" }, "geometry": { "type": "Point", "coordinates": [153.538753, -28.1682934] } },
+    //         { "type": "Feature", "properties": { "fid": 2, "full_id": "n145620592", "osm_id": "145620592", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Carrara", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.3683962, -28.02077] } },
+    //         { "type": "Feature", "properties": { "fid": 3, "full_id": "n145620790", "osm_id": "145620790", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": "en:SurfersParadise,Queensland", "wikidata": "Q1024734", "source:population": null, "population": "19668", "name": "SurfersParadise", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.42398, -27.9989899] } },
+    //         { "type": "Feature", "properties": { "fid": 4, "full_id": "n185549870", "osm_id": "185549870", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": "4220", "wikipedia": null, "wikidata": null, "source:population": null, "population": "6364", "name": "Miami", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4377915, -28.0680039] } },
+    //         { "type": "Feature", "properties": { "fid": 5, "full_id": "n185848981", "osm_id": "185848981", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "20522", "name": "Robina", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.391315600000013, -28.0751722] } },
+    //         { "type": "Feature", "properties": { "fid": 6, "full_id": "n193791776", "osm_id": "193791776", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "5722", "name": "MermaidBeach", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4373204, -28.0447106] } },
+    //         { "type": "Feature", "properties": { "fid": 7, "full_id": "n193791982", "osm_id": "193791982", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "11789", "name": "MermaidWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4191232, -28.0513] } },
+    //         { "type": "Feature", "properties": { "fid": 8, "full_id": "n193793498", "osm_id": "193793498", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": "4227", "wikipedia": null, "wikidata": null, "source:population": null, "population": "14366", "name": "VarsityLakes", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4143928, -28.0792975] } },
+    //         { "type": "Feature", "properties": { "fid": 9, "full_id": "n193794026", "osm_id": "193794026", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "13868", "name": "BurleighWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "City=GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4358054, -28.0931614] } },
+    //         { "type": "Feature", "properties": { "fid": 10, "full_id": "n193797886", "osm_id": "193797886", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "13956", "name": "PalmBeach", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4702686, -28.1194259] } },
+    //         { "type": "Feature", "properties": { "fid": 11, "full_id": "n193798243", "osm_id": "193798243", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "5976", "name": "Tugun", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.492927900000012, -28.1412253] } },
+    //         { "type": "Feature", "properties": { "fid": 12, "full_id": "n1133494094", "osm_id": "1133494094", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "13204", "name": "Mudgeeraba", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.3576679, -28.0804969] } },
+    //         { "type": "Feature", "properties": { "fid": 13, "full_id": "n1374631054", "osm_id": "1374631054", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "3551", "name": "Tallebudgera", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.428695, -28.1401272] } },
+    //         { "type": "Feature", "properties": { "fid": 14, "full_id": "n2112137024", "osm_id": "2112137024", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "BiggeraWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.398392300000012, -27.9271595] } },
+    //         { "type": "Feature", "properties": { "fid": 15, "full_id": "n2112137031", "osm_id": "2112137031", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "16402", "name": "Labrador", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.398712499999988, -27.9427642] } },
+    //         { "type": "Feature", "properties": { "fid": 16, "full_id": "n2147408785", "osm_id": "2147408785", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": "AU-QLD", "postal_code": "4220", "wikipedia": "en:BurleighHeads,Queensland", "wikidata": "Q4999119", "source:population": null, "population": "9188", "name": "BurleighHeads", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.439579900000012, -28.1021343] } },
+    //         { "type": "Feature", "properties": { "fid": 17, "full_id": "n2147408786", "osm_id": "2147408786", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": "en:Currumbin,Queensland", "wikidata": "Q5195187", "source:population": null, "population": "2780", "name": "Currumbin", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.4799277, -28.1369655] } },
+    //         { "type": "Feature", "properties": { "fid": 18, "full_id": "n2147610418", "osm_id": "2147610418", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": "en:Elanora,Queensland", "wikidata": "Q5353454", "source:population": null, "population": "11680", "name": "Elanora", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.4591428, -28.126998] } },
+    //         { "type": "Feature", "properties": { "fid": 19, "full_id": "n2959443185", "osm_id": "2959443185", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "1711", "name": "CurrumbinValley", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.422605, -28.179401] } },
+    //         { "type": "Feature", "properties": { "fid": 20, "full_id": "n3552467029", "osm_id": "3552467029", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Ashmore", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.3770522, -27.9909266] } },
+    //         { "type": "Feature", "properties": { "fid": 21, "full_id": "n3552470544", "osm_id": "3552470544", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Bundall", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.4080912, -28.0112822] } },
+    //         { "type": "Feature", "properties": { "fid": 22, "full_id": "n3782906811", "osm_id": "3782906811", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "8436", "name": "Parkwood", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.3610577, -27.9511525] } },
+    //         { "type": "Feature", "properties": { "fid": 23, "full_id": "n3782906812", "osm_id": "3782906812", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Arundel", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.3653514, -27.9360655] } },
+    //         { "type": "Feature", "properties": { "fid": 24, "full_id": "n3782927875", "osm_id": "3782927875", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "28315", "name": "Southport", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.406669599999987, -27.9687807] } },
+    //         { "type": "Feature", "properties": { "fid": 25, "full_id": "n3782927876", "osm_id": "3782927876", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "3496", "name": "MainBeach", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.4271228, -27.9787768] } },
+    //         { "type": "Feature", "properties": { "fid": 26, "full_id": "n3782927877", "osm_id": "3782927877", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "6213", "name": "Molendinar", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.375434399999989, -27.9745778] } },
+    //         { "type": "Feature", "properties": { "fid": 27, "full_id": "n3782932014", "osm_id": "3782932014", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "5712", "name": "ReedyCreek", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.403286400000013, -28.1205111] } },
+    //         { "type": "Feature", "properties": { "fid": 28, "full_id": "n3782932968", "osm_id": "3782932968", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Benowa", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.383459499999987, -28.0041744] } },
+    //         { "type": "Feature", "properties": { "fid": 29, "full_id": "n3782932970", "osm_id": "3782932970", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "5574", "name": "Worongary", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.339128, -28.0360735] } },
+    //         { "type": "Feature", "properties": { "fid": 30, "full_id": "n3782934557", "osm_id": "3782934557", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "6321", "name": "Merrimac", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.3743615, -28.0524361] } },
+    //         { "type": "Feature", "properties": { "fid": 31, "full_id": "n3782934558", "osm_id": "3782934558", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "3986", "name": "ClearIslandWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.3985228, -28.0437627] } },
+    //         { "type": "Feature", "properties": { "fid": 32, "full_id": "n4187284389", "osm_id": "4187284389", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "8883", "name": "CurrumbinWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast,Queensland" }, "geometry": { "type": "Point", "coordinates": [153.4612699, -28.1553122] } },
+    //         { "type": "Feature", "properties": { "fid": 33, "full_id": "n4313818426", "osm_id": "4313818426", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": "4225", "wikipedia": null, "wikidata": null, "source:population": null, "population": "1662", "name": "Bilinga", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.505324, -28.1585408] } },
+    //         { "type": "Feature", "properties": { "fid": 34, "full_id": "n4313863363", "osm_id": "4313863363", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "4182", "name": "Bonogin", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "city=GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.3604583, -28.1277689] } },
+    //         { "type": "Feature", "properties": { "fid": 35, "full_id": "n4313863822", "osm_id": "4313863822", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "4614", "name": "Broadbeach", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "city=GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.429333500000013, -28.0235886] } },
+    //         { "type": "Feature", "properties": { "fid": 36, "full_id": "n4313870809", "osm_id": "4313870809", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": "7534", "name": "BroadbeachWaters", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": "City=GoldCoast" }, "geometry": { "type": "Point", "coordinates": [153.4122307, -28.0316652] } },
+    //         { "type": "Feature", "properties": { "fid": 37, "full_id": "n4313891120", "osm_id": "4313891120", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "KoalaPark", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.4526204, -28.0976798] } },
+    //         { "type": "Feature", "properties": { "fid": 38, "full_id": "n4313900108", "osm_id": "4313900108", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "WestBurleigh", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.4392919, -28.1107626] } },
+    //         { "type": "Feature", "properties": { "fid": 39, "full_id": "n4315296345", "osm_id": "4315296345", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": "4225", "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "Kirra", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.5295271, -28.1676805] } },
+    //         { "type": "Feature", "properties": { "fid": 40, "full_id": "n5863007171", "osm_id": "5863007171", "osm_type": "node", "place": null, "historic": "memorial", "description": "QueenslandandNSWBorder", "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": null, "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.5436803, -28.168031] } },
+    //         { "type": "Feature", "properties": { "fid": 41, "full_id": "n6071548150", "osm_id": "6071548150", "osm_type": "node", "place": "suburb", "historic": null, "description": null, "is_in:iso_3166_2": null, "postal_code": null, "wikipedia": null, "wikidata": null, "source:population": null, "population": null, "name": "TweedHeads", "is_in_1": null, "is_in:state_code": null, "is_in:state": null, "is_in:country_code": null, "is_in:country": null, "is_in": null }, "geometry": { "type": "Point", "coordinates": [153.5369986, -28.1786639] } }
+    //     ]
+    // };
+    // let sector_gc = [
+    //     { "sector": 30901, "areas": ["BroadbeachWaters", "BurleighHeads", "BurleighWaters", "MermaidBeach", "Broadbeach", "MermaidWaters", "Miami"] },
+    //     { "sector": 30902, "areas": ["Coolangatta", "Currumbin", "Tugun", "CurrumbinWaters", "Elanora", "PalmBeach"] },
+    //     { "sector": 30903, "areas": ["Arundel", "BiggeraWaters", "Labrador"] },
+    //     { "sector": 30905, "areas": ["Tallebudgera"] },
+    //     { "sector": 30908, "areas": ["ClearIslandWaters", "VarsityLakes"] },
+    //     { "sector": 30909, "areas": ["Ashmore", "Molendinar", "Parkwood", "Southport"] },
+    //     { "sector": 30910, "areas": ["Benowa", "Bundall", "MainBeach", "SurfersParadise"] }
+    // ];
+    // let geo_gc = {
+    //     "type": "FeatureCollection",
+    //     "name": "GC",
+    //     "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+    //     "features": sector_gc.map(sm => {
+    //         return {
+    //             "type": "Feature", "properties": {"name":sm.sector,"areas":sm.areas.map(sam=>{return {name:sam,coordinates:ori_geo_gc.features.find(ogf=>ogf.properties.name==sam).geometry.coordinates}})}, "geometry": {
+    //                 "type": "Point", "coordinates": turf.center(
+    //                     {
+    //                         "type": "FeatureCollection",
+    //                         "name": "GC",
+    //                         "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+    //                         "features": ori_geo_gc.features.filter(off => sm.areas.some(ss => off.properties.name == ss))
+    //                     }
+    //                 ).geometry.coordinates
+    //             }
+    //         }
+    //     }
+    //     )
+    // }
+
+    // GC合并分区后
+    let geo_gc = {
+        "type": "FeatureCollection",
+        "name": "GC",
+        "crs": {
+            "type": "name",
+            "properties": {
+                "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+            }
+        },
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30901,
+                    "areas": [
+                        {
+                            "name": "BroadbeachWaters",
+                            "coordinates": [
+                                153.4122307,
+                                -28.0316652
+                            ]
+                        },
+                        {
+                            "name": "BurleighHeads",
+                            "coordinates": [
+                                153.4395799,
+                                -28.1021343
+                            ]
+                        },
+                        {
+                            "name": "BurleighWaters",
+                            "coordinates": [
+                                153.4358054,
+                                -28.0931614
+                            ]
+                        },
+                        {
+                            "name": "MermaidBeach",
+                            "coordinates": [
+                                153.4373204,
+                                -28.0447106
+                            ]
+                        },
+                        {
+                            "name": "Broadbeach",
+                            "coordinates": [
+                                153.4293335,
+                                -28.0235886
+                            ]
+                        },
+                        {
+                            "name": "MermaidWaters",
+                            "coordinates": [
+                                153.4191232,
+                                -28.0513
+                            ]
+                        },
+                        {
+                            "name": "Miami",
+                            "coordinates": [
+                                153.4377915,
+                                -28.0680039
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.4259053,
+                        -28.06286145
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30902,
+                    "areas": [
+                        {
+                            "name": "Coolangatta",
+                            "coordinates": [
+                                153.538753,
+                                -28.1682934
+                            ]
+                        },
+                        {
+                            "name": "Currumbin",
+                            "coordinates": [
+                                153.4799277,
+                                -28.1369655
+                            ]
+                        },
+                        {
+                            "name": "Tugun",
+                            "coordinates": [
+                                153.4929279,
+                                -28.1412253
+                            ]
+                        },
+                        {
+                            "name": "CurrumbinWaters",
+                            "coordinates": [
+                                153.4612699,
+                                -28.1553122
+                            ]
+                        },
+                        {
+                            "name": "Elanora",
+                            "coordinates": [
+                                153.4591428,
+                                -28.126998
+                            ]
+                        },
+                        {
+                            "name": "PalmBeach",
+                            "coordinates": [
+                                153.4702686,
+                                -28.1194259
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.49894790000002,
+                        -28.14385965
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30903,
+                    "areas": [
+                        {
+                            "name": "Arundel",
+                            "coordinates": [
+                                153.3653514,
+                                -27.9360655
+                            ]
+                        },
+                        {
+                            "name": "BiggeraWaters",
+                            "coordinates": [
+                                153.3983923,
+                                -27.9271595
+                            ]
+                        },
+                        {
+                            "name": "Labrador",
+                            "coordinates": [
+                                153.3987125,
+                                -27.9427642
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.38203195,
+                        -27.93496185
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30905,
+                    "areas": [
+                        {
+                            "name": "Tallebudgera",
+                            "coordinates": [
+                                153.428695,
+                                -28.1401272
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.428695,
+                        -28.1401272
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30908,
+                    "areas": [
+                        {
+                            "name": "ClearIslandWaters",
+                            "coordinates": [
+                                153.3985228,
+                                -28.0437627
+                            ]
+                        },
+                        {
+                            "name": "VarsityLakes",
+                            "coordinates": [
+                                153.4143928,
+                                -28.0792975
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.4064578,
+                        -28.0615301
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30909,
+                    "areas": [
+                        {
+                            "name": "Ashmore",
+                            "coordinates": [
+                                153.3770522,
+                                -27.9909266
+                            ]
+                        },
+                        {
+                            "name": "Molendinar",
+                            "coordinates": [
+                                153.3754344,
+                                -27.9745778
+                            ]
+                        },
+                        {
+                            "name": "Parkwood",
+                            "coordinates": [
+                                153.3610577,
+                                -27.9511525
+                            ]
+                        },
+                        {
+                            "name": "Southport",
+                            "coordinates": [
+                                153.4066696,
+                                -27.9687807
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.38386365,
+                        -27.97103955
+                    ]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": {
+                    "name": 30910,
+                    "areas": [
+                        {
+                            "name": "Benowa",
+                            "coordinates": [
+                                153.3834595,
+                                -28.0041744
+                            ]
+                        },
+                        {
+                            "name": "Bundall",
+                            "coordinates": [
+                                153.4080912,
+                                -28.0112822
+                            ]
+                        },
+                        {
+                            "name": "MainBeach",
+                            "coordinates": [
+                                153.4271228,
+                                -27.9787768
+                            ]
+                        },
+                        {
+                            "name": "SurfersParadise",
+                            "coordinates": [
+                                153.42398,
+                                -27.9989899
+                            ]
+                        }
+                    ]
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        153.40529114999998,
+                        -27.9950295
+                    ]
+                }
+            }
+        ]
+    }
+    // 总量变化.xlsx转为JSON http://www.esjson.com/exceltojson.html
+    let output_gc = [
+        { "Area": "30901", "o2013-2015": "0.4003", "o2015-2017": "0.1483", "o2017-2019": "0.3376", "o2019-2021": "0.2065", "o2013-2021": "1.5952" },
+        { "Area": "30902", "o2013-2015": "0.3426", "o2015-2017": "0.1006", "o2017-2019": "0.2933", "o2019-2021": "0.1639", "o2013-2021": "1.2244" },
+        { "Area": "30903", "o2013-2015": "0.383", "o2015-2017": "0.1438", "o2017-2019": "0.2633", "o2019-2021": "0.2284", "o2013-2021": "1.455" },
+        { "Area": "30908", "o2013-2015": "0.3944", "o2015-2017": "0.1555", "o2017-2019": "0.3248", "o2019-2021": "0.1882", "o2013-2021": "1.5364" },
+        { "Area": "30909", "o2013-2015": "0.3713", "o2015-2017": "0.1512", "o2017-2019": "0.3035", "o2019-2021": "0.2007", "o2013-2021": "1.4709" },
+        { "Area": "30910", "o2013-2015": "0.4824", "o2015-2017": "0.2368", "o2017-2019": "0.3524", "o2019-2021": "0.2542", "o2013-2021": "2.1103" },
+        // { "Area": "Average", "o2013-2015": "0.395666667", "o2015-2017": "0.156033333", "o2017-2019": "0.312483333", "o2019-2021": "0.206983333", "o2013-2021": "1.565366667" }
+    ];
+    //     // ↓↓↓areas_detail_gc数据处理过程↓↓↓
+    //     // 获得区域唯一值
+    //     let areas_gc = output_gc.filter(anf => anf.Area!='Average').map(fm=>fm.Area);
+    //     //将【区域详细数据.csv】转json http://www.esjson.com/exceltojson.html 得到如下结果
+    //     let detail_gc = [
+    // {"year":"2013","population":"62588","population_change_with_lastyr":"664","density_per/km2":"1857.210682","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30901","dwellings":"23618.11","quantity":"3842"},
+    // {"year":"2015","population":"63157","population_change_with_lastyr":"243","density_per/km2":"1874.094955","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30901","dwellings":"23832.83","quantity":"5380"},
+    // {"year":"2017","population":"65117","population_change_with_lastyr":"626","density_per/km2":"1932.255193","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30901","dwellings":"24572.45","quantity":"6178"},
+    // {"year":"2019","population":"66027","population_change_with_lastyr":"439","density_per/km2":"1959.25816","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30901","dwellings":"24915.85","quantity":"8264"},
+    // {"year":"2021","population":"67119","population_change_with_lastyr":"120","density_per/km2":"1991.661721","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30901","dwellings":"25327.92","quantity":"9971"},
+    // {"year":"2013","population":"52984","population_change_with_lastyr":"253","density_per/km2":"1518.166189","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30902","dwellings":"19993.96","quantity":"4028"},
+    // {"year":"2015","population":"53262","population_change_with_lastyr":"293","density_per/km2":"1526.131805","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30902","dwellings":"20098.87","quantity":"5408"},
+    // {"year":"2017","population":"55854","population_change_with_lastyr":"713","density_per/km2":"1600.401146","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30902","dwellings":"21076.98","quantity":"5952"},
+    // {"year":"2019","population":"57715","population_change_with_lastyr":"1068","density_per/km2":"1653.724928","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30902","dwellings":"21779.25","quantity":"7698"},
+    // {"year":"2021","population":"59209","population_change_with_lastyr":"367","density_per/km2":"1696.532951","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30902","dwellings":"22343.02","quantity":"8960"},
+    // {"year":"2013","population":"35185","population_change_with_lastyr":"815","density_per/km2":"1965.642458","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30903","dwellings":"13277.36","quantity":"1402"},
+    // {"year":"2015","population":"36256","population_change_with_lastyr":"538","density_per/km2":"2025.47486","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30903","dwellings":"13681.51","quantity":"1939"},
+    // {"year":"2017","population":"39428","population_change_with_lastyr":"850","density_per/km2":"2202.681564","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30903","dwellings":"14878.49","quantity":"2218"},
+    // {"year":"2019","population":"41012","population_change_with_lastyr":"999","density_per/km2":"2291.173184","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30903","dwellings":"15476.23","quantity":"2802"},
+    // {"year":"2021","population":"42118","population_change_with_lastyr":"369","density_per/km2":"2352.960894","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30903","dwellings":"15893.58","quantity":"3442"},
+    // {"year":"2013","population":"7148","population_change_with_lastyr":"18","density_per/km2":"62.4","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30905","dwellings":"2697.36","quantity":"433"},
+    // {"year":"2015","population":"7331","population_change_with_lastyr":"96","density_per/km2":"64","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30905","dwellings":"2766.42","quantity":"601"},
+    // {"year":"2017","population":"7533","population_change_with_lastyr":"114","density_per/km2":"65.8","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30905","dwellings":"2842.64","quantity":"696"},
+    // {"year":"2019","population":"7681","population_change_with_lastyr":"87","density_per/km2":"67.1","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30905","dwellings":"2898.49","quantity":"950"},
+    // {"year":"2021","population":"7907","population_change_with_lastyr":"45","density_per/km2":"69.1","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30905","dwellings":"2983.77","quantity":"1050"},
+    // {"year":"2013","population":"19845","population_change_with_lastyr":"369","density_per/km2":"1908.173077","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30908","dwellings":"7488.68","quantity":"1070"},
+    // {"year":"2015","population":"20349","population_change_with_lastyr":"374","density_per/km2":"1956.634615","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30908","dwellings":"7678.87","quantity":"1492"},
+    // {"year":"2017","population":"20346","population_change_with_lastyr":"270","density_per/km2":"1956.346154","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30908","dwellings":"7677.74","quantity":"1724"},
+    // {"year":"2019","population":"21027","population_change_with_lastyr":"342","density_per/km2":"2021.826923","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30908","dwellings":"7934.72","quantity":"2284"},
+    // {"year":"2021","population":"21016","population_change_with_lastyr":"-140","density_per/km2":"2020.769231","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30908","dwellings":"7930.57","quantity":"2714"},
+    // {"year":"2013","population":"58544","population_change_with_lastyr":"736","density_per/km2":"1672.685714","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30909","dwellings":"22092.08","quantity":"3024"},
+    // {"year":"2015","population":"59842","population_change_with_lastyr":"884","density_per/km2":"1709.771429","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30909","dwellings":"22581.89","quantity":"4147"},
+    // {"year":"2017","population":"62287","population_change_with_lastyr":"1159","density_per/km2":"1779.628571","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30909","dwellings":"23504.53","quantity":"4774"},
+    // {"year":"2019","population":"63270","population_change_with_lastyr":"423","density_per/km2":"1807.714286","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30909","dwellings":"23875.47","quantity":"6223"},
+    // {"year":"2021","population":"63822","population_change_with_lastyr":"-129","density_per/km2":"1823.485714","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30909","dwellings":"24083.77","quantity":"7472"},
+    // {"year":"2013","population":"38372","population_change_with_lastyr":"413","density_per/km2":"1937.979798","daylight_hours":"12.29","income_per/week":"2206","energy_cost_c/kwh":"29","solar_pv_cost":"3902","housing_construction":"18923","suburbs":"30910","dwellings":"14480.00","quantity":"1196"},
+    // {"year":"2015","population":"39264","population_change_with_lastyr":"517","density_per/km2":"1983.030303","daylight_hours":"12.34","income_per/week":"2187","energy_cost_c/kwh":"26","solar_pv_cost":"3287","housing_construction":"23166","suburbs":"30910","dwellings":"14816.60","quantity":"1773"},
+    // {"year":"2017","population":"44190","population_change_with_lastyr":"1307","density_per/km2":"2231.818182","daylight_hours":"12.29","income_per/week":"2242","energy_cost_c/kwh":"28","solar_pv_cost":"3052","housing_construction":"24678","suburbs":"30910","dwellings":"16675.47","quantity":"2193"},
+    // {"year":"2019","population":"45678","population_change_with_lastyr":"849","density_per/km2":"2306.969697","daylight_hours":"12.34","income_per/week":"2340","energy_cost_c/kwh":"30","solar_pv_cost":"3030","housing_construction":"21564","suburbs":"30910","dwellings":"17236.98","quantity":"2966"},
+    // {"year":"2021","population":"47543","population_change_with_lastyr":"583","density_per/km2":"2401.161616","daylight_hours":"12.29","income_per/week":"2230","energy_cost_c/kwh":"28","solar_pv_cost":"3990","housing_construction":"28536","suburbs":"30910","dwellings":"17940.75","quantity":"3720"}
+    // ]
+    //     // 将分区信息与全量信息匹配
+    //     let areas_detail_gc = areas_gc.map(abm => {
+    //         return {
+    //             name: abm,
+    //             years: detail_gc.filter(dbf => dbf.suburbs == abm)
+    //         }
+    //     })
+    //     //↑↑↑areas_detail_gc数据处理过程↑↑↑
+    let areas_detail_gc = [
+        {
+            "name": "30901",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "62588",
+                    "population_change_with_lastyr": "664",
+                    "density_per/km2": "1857.210682",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30901",
+                    "dwellings": "23618.11",
+                    "quantity": "3842"
+                },
+                {
+                    "year": "2015",
+                    "population": "63157",
+                    "population_change_with_lastyr": "243",
+                    "density_per/km2": "1874.094955",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30901",
+                    "dwellings": "23832.83",
+                    "quantity": "5380"
+                },
+                {
+                    "year": "2017",
+                    "population": "65117",
+                    "population_change_with_lastyr": "626",
+                    "density_per/km2": "1932.255193",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30901",
+                    "dwellings": "24572.45",
+                    "quantity": "6178"
+                },
+                {
+                    "year": "2019",
+                    "population": "66027",
+                    "population_change_with_lastyr": "439",
+                    "density_per/km2": "1959.25816",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30901",
+                    "dwellings": "24915.85",
+                    "quantity": "8264"
+                },
+                {
+                    "year": "2021",
+                    "population": "67119",
+                    "population_change_with_lastyr": "120",
+                    "density_per/km2": "1991.661721",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30901",
+                    "dwellings": "25327.92",
+                    "quantity": "9971"
+                }
+            ]
+        },
+        {
+            "name": "30902",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "52984",
+                    "population_change_with_lastyr": "253",
+                    "density_per/km2": "1518.166189",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30902",
+                    "dwellings": "19993.96",
+                    "quantity": "4028"
+                },
+                {
+                    "year": "2015",
+                    "population": "53262",
+                    "population_change_with_lastyr": "293",
+                    "density_per/km2": "1526.131805",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30902",
+                    "dwellings": "20098.87",
+                    "quantity": "5408"
+                },
+                {
+                    "year": "2017",
+                    "population": "55854",
+                    "population_change_with_lastyr": "713",
+                    "density_per/km2": "1600.401146",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30902",
+                    "dwellings": "21076.98",
+                    "quantity": "5952"
+                },
+                {
+                    "year": "2019",
+                    "population": "57715",
+                    "population_change_with_lastyr": "1068",
+                    "density_per/km2": "1653.724928",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30902",
+                    "dwellings": "21779.25",
+                    "quantity": "7698"
+                },
+                {
+                    "year": "2021",
+                    "population": "59209",
+                    "population_change_with_lastyr": "367",
+                    "density_per/km2": "1696.532951",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30902",
+                    "dwellings": "22343.02",
+                    "quantity": "8960"
+                }
+            ]
+        },
+        {
+            "name": "30903",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "35185",
+                    "population_change_with_lastyr": "815",
+                    "density_per/km2": "1965.642458",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30903",
+                    "dwellings": "13277.36",
+                    "quantity": "1402"
+                },
+                {
+                    "year": "2015",
+                    "population": "36256",
+                    "population_change_with_lastyr": "538",
+                    "density_per/km2": "2025.47486",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30903",
+                    "dwellings": "13681.51",
+                    "quantity": "1939"
+                },
+                {
+                    "year": "2017",
+                    "population": "39428",
+                    "population_change_with_lastyr": "850",
+                    "density_per/km2": "2202.681564",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30903",
+                    "dwellings": "14878.49",
+                    "quantity": "2218"
+                },
+                {
+                    "year": "2019",
+                    "population": "41012",
+                    "population_change_with_lastyr": "999",
+                    "density_per/km2": "2291.173184",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30903",
+                    "dwellings": "15476.23",
+                    "quantity": "2802"
+                },
+                {
+                    "year": "2021",
+                    "population": "42118",
+                    "population_change_with_lastyr": "369",
+                    "density_per/km2": "2352.960894",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30903",
+                    "dwellings": "15893.58",
+                    "quantity": "3442"
+                }
+            ]
+        },
+        {
+            "name": "30908",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "19845",
+                    "population_change_with_lastyr": "369",
+                    "density_per/km2": "1908.173077",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30908",
+                    "dwellings": "7488.68",
+                    "quantity": "1070"
+                },
+                {
+                    "year": "2015",
+                    "population": "20349",
+                    "population_change_with_lastyr": "374",
+                    "density_per/km2": "1956.634615",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30908",
+                    "dwellings": "7678.87",
+                    "quantity": "1492"
+                },
+                {
+                    "year": "2017",
+                    "population": "20346",
+                    "population_change_with_lastyr": "270",
+                    "density_per/km2": "1956.346154",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30908",
+                    "dwellings": "7677.74",
+                    "quantity": "1724"
+                },
+                {
+                    "year": "2019",
+                    "population": "21027",
+                    "population_change_with_lastyr": "342",
+                    "density_per/km2": "2021.826923",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30908",
+                    "dwellings": "7934.72",
+                    "quantity": "2284"
+                },
+                {
+                    "year": "2021",
+                    "population": "21016",
+                    "population_change_with_lastyr": "-140",
+                    "density_per/km2": "2020.769231",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30908",
+                    "dwellings": "7930.57",
+                    "quantity": "2714"
+                }
+            ]
+        },
+        {
+            "name": "30909",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "58544",
+                    "population_change_with_lastyr": "736",
+                    "density_per/km2": "1672.685714",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30909",
+                    "dwellings": "22092.08",
+                    "quantity": "3024"
+                },
+                {
+                    "year": "2015",
+                    "population": "59842",
+                    "population_change_with_lastyr": "884",
+                    "density_per/km2": "1709.771429",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30909",
+                    "dwellings": "22581.89",
+                    "quantity": "4147"
+                },
+                {
+                    "year": "2017",
+                    "population": "62287",
+                    "population_change_with_lastyr": "1159",
+                    "density_per/km2": "1779.628571",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30909",
+                    "dwellings": "23504.53",
+                    "quantity": "4774"
+                },
+                {
+                    "year": "2019",
+                    "population": "63270",
+                    "population_change_with_lastyr": "423",
+                    "density_per/km2": "1807.714286",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30909",
+                    "dwellings": "23875.47",
+                    "quantity": "6223"
+                },
+                {
+                    "year": "2021",
+                    "population": "63822",
+                    "population_change_with_lastyr": "-129",
+                    "density_per/km2": "1823.485714",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30909",
+                    "dwellings": "24083.77",
+                    "quantity": "7472"
+                }
+            ]
+        },
+        {
+            "name": "30910",
+            "years": [
+                {
+                    "year": "2013",
+                    "population": "38372",
+                    "population_change_with_lastyr": "413",
+                    "density_per/km2": "1937.979798",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2206",
+                    "energy_cost_c/kwh": "29",
+                    "solar_pv_cost": "3902",
+                    "housing_construction": "18923",
+                    "suburbs": "30910",
+                    "dwellings": "14480.00",
+                    "quantity": "1196"
+                },
+                {
+                    "year": "2015",
+                    "population": "39264",
+                    "population_change_with_lastyr": "517",
+                    "density_per/km2": "1983.030303",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2187",
+                    "energy_cost_c/kwh": "26",
+                    "solar_pv_cost": "3287",
+                    "housing_construction": "23166",
+                    "suburbs": "30910",
+                    "dwellings": "14816.60",
+                    "quantity": "1773"
+                },
+                {
+                    "year": "2017",
+                    "population": "44190",
+                    "population_change_with_lastyr": "1307",
+                    "density_per/km2": "2231.818182",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2242",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3052",
+                    "housing_construction": "24678",
+                    "suburbs": "30910",
+                    "dwellings": "16675.47",
+                    "quantity": "2193"
+                },
+                {
+                    "year": "2019",
+                    "population": "45678",
+                    "population_change_with_lastyr": "849",
+                    "density_per/km2": "2306.969697",
+                    "daylight_hours": "12.34",
+                    "income_per/week": "2340",
+                    "energy_cost_c/kwh": "30",
+                    "solar_pv_cost": "3030",
+                    "housing_construction": "21564",
+                    "suburbs": "30910",
+                    "dwellings": "17236.98",
+                    "quantity": "2966"
+                },
+                {
+                    "year": "2021",
+                    "population": "47543",
+                    "population_change_with_lastyr": "583",
+                    "density_per/km2": "2401.161616",
+                    "daylight_hours": "12.29",
+                    "income_per/week": "2230",
+                    "energy_cost_c/kwh": "28",
+                    "solar_pv_cost": "3990",
+                    "housing_construction": "28536",
+                    "suburbs": "30910",
+                    "dwellings": "17940.75",
+                    "quantity": "3720"
+                }
+            ]
+        }
+    ];
+    // 地理坐标中心点
+    let center = turf.center(
+        {
+            "type": "FeatureCollection",
+            "name": "GC",
+            "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+            "features": [...geo_bne.features, ...geo_gc.features]
+        }
+    ).geometry.coordinates.reverse();
+</script>
+<script>
+    // 定义地图
+    let map = L.map('map').setView(center, 9);
+    L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+        maxZoom: 18,
+        id: 'mapbox/streets-v11',
+        tileSize: 512,
+        zoomOffset: -1,
+        accessToken: 'pk.eyJ1IjoiZnJhbmtwenQiLCJhIjoiY2wydnczajB2MGZ5NDNmcW0ycGJnMHh0eSJ9.f6y6KA9p-RsXZiVbEM3gjA'
+    }).addTo(map);
+
+    let cityLayer = L.layerGroup().addTo(map);
+    let sectorLayer = L.layerGroup();
+    let txtLayer = L.layerGroup();
+    map.on('zoom', event => {
+        if (event.target._zoom > 10) {
+            if (map.hasLayer(cityLayer)) cityLayer.remove();
+            if (!map.hasLayer(sectorLayer)) sectorLayer.addTo(map);
+        } else {
+            if (map.hasLayer(sectorLayer)) sectorLayer.remove();
+            if (!map.hasLayer(cityLayer)) cityLayer.addTo(map);
+        }
+        if (event.target._zoom > 12) {
+            if (!map.hasLayer(txtLayer)) txtLayer.addTo(map);
+        } else {
+            if (map.hasLayer(txtLayer)) txtLayer.remove();
+        }
+    })
+    // 定义图表类型
+    let fields = ["default", "population_change_with_lastyr", "density_per/km2", "daylight_hours", "income_per/week", "energy_cost_c/kwh", "solar_pv_cost", "housing_construction", "dwellings", "quantity"];
+    // 定义图表X轴
+    let defaultXdata = ['2013-2015', '2015-2017', '2017-2019', '2019-2021'];
+    let otherXdata = ['2013', '2015', '2017', '2019', '2021'];
+    // 添加地图marker并绑定弹出popup框
+    ['bne', 'gc'].forEach(city => {
+        //城市popup
+        let marker = L.marker(turf.center(eval(`geo_${city}`)).geometry.coordinates.reverse()).addTo(cityLayer).bindPopup(`<b>${city}</b>
+            <div id="pop_${city}" style="width:750px;height:450px"></div>
+            <div id="btn_${city}" style="width:750px;height:50px">
+                ${fields.map(fm => `<button onclick="changeChart('${city}','${fm}','${city}',${true})">${fm}</button>`)}
+            </div>`, { maxWidth: '750px' }).on('click', e => {
+            openPopup(e.target, city, city, true)
+        })
+        //  两个城市的分区popup
+        eval(`areas_detail_${city}`).forEach(ele => {
+            let geoTemp = eval(`geo_${city}`).features.find(gff => gff.properties.name == ele.name);
+            let marker = L.marker(geoTemp.geometry.coordinates.reverse()).addTo(sectorLayer).bindPopup(`<b>${ele.name}</b>
+            <div id="pop_${ele.name}" style="width:750px;height:450px"></div>
+            <div id="btn_${ele.name}" style="width:750px;height:50px">
+                ${fields.map(fm => `<button onclick="changeChart('${ele.name}','${fm}','${city}')">${fm}</button>`)}
+            </div>`, { maxWidth: '750px' }).on('click', e => {
+                openPopup(e.target, ele.name, city)
+            })
+            // 分区文字标注
+            let sector = eval(`geo_${city}`).features.find(cf=>cf.properties.name == ele.name);
+            let secIcon = L.divIcon({
+                html: `<div class='iconTxt'>${ele.name}</div>`,
+                className: 'my-div-icon',
+                iconSize:30
+                });
+            L.marker(sector.geometry.coordinates, { icon: secIcon }).addTo(sectorLayer);
+            // GC的原始区域文字标注
+            if(sector.properties.areas){
+                sector.properties.areas.forEach(element => {
+                    let myIcon = L.divIcon({
+                    html: `<div class='iconTxt'>${ele.name}_${element.name}</div>`,
+                    className: 'my-div-icon',
+                    iconSize:30
+                    });
+                    L.marker(element.coordinates.reverse(), { icon: myIcon }).addTo(txtLayer);
+                });
+            }
+
+        });
+    });
+    // 弹出popup框并初始化default图表和切换按钮
+    function openPopup(marker, id, city, isCity) {
+        marker.openPopup();
+        changeChart(id, 'default', city, isCity);
+    }
+    // 切换sheet
+    function changeChart(id, field, city, isCity) {
+        let xData, sData;
+        if (field == 'default') {
+            xData = defaultXdata;
+            sData = isCity
+                ? eval(`output_${city}`).map(cm => {
+                    let sTemp = {};
+                    sTemp.name = cm.Area;
+                    sTemp.type = 'line';
+                    sTemp.data = xData.map(dm => cm['o' + dm]);
+                    return sTemp;
+                })
+                : xData.map(dm => eval(`output_${city}`).find(obf => obf.Area == id)['o' + dm]);
+        } else {
+            xData = otherXdata;
+            sData = isCity
+                ? eval(`areas_detail_${city}`).map(cm => {
+                    let sTemp = {};
+                    sTemp.name = cm.name;
+                    sTemp.type = 'line';
+                    sTemp.data = xData.map(om => cm.years.find(yf => yf.year == om)[field]);
+                    return sTemp;
+                })
+                : xData.map(om => eval(`areas_detail_${city}`).find(af => af.name == id).years.find(yf => yf.year == om)[field])
+        };
+        setTimeout(() => {
+            let chartDom = document.getElementById(`pop_${id}`);
+            let myChart = echarts.init(chartDom);
+            let option;
+            option = isCity
+                ? {
+                    legend: {
+                        data: sData.map(sm => sm.name)
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: xData
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+
+                    dataZoom: [
+                        {
+                            show: true,
+                            yAxisIndex: 0,
+                            filterMode: 'empty',
+                            width: 30,
+                            height: '80%',
+                            showDataShadow: false,
+                            left: '93%'
+                        }
+                    ],
+                    series: sData
+                }
+                : {
+                    xAxis: {
+                        type: 'category',
+                        data: xData
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+                    series: [
+                        {
+                            data: sData,
+                            type: 'line'
+                        }
+                    ]
+                }
+            option && myChart.setOption(option);
+        }, 50);
+    }
+</script>
+
+</html>
